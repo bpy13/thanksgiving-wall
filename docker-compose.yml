@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 20anniversary
+      POSTGRES_DB: thanksgiving
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+  web:
+    build: .
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 20anniversary
+      POSTGRES_DB: thanksgiving
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+
+volumes:
+  pg_data:

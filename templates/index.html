@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Test</title>
+</head>
+<body>
+    <h1>Upload Test</h1>
+    <form id="upload-form">
+        <label for="message">Message (required):</label>
+        <input type="text" id="message" name="message" required><br><br>
+
+        <label for="user">User:</label>
+        <input type="text" id="user" name="user"><br><br>
+
+        <label for="group">Group:</label>
+        <input type="text" id="group" name="group"><br><br>
+
+        <label for="event">Event:</label>
+        <input type="text" id="event" name="event"><br><br>
+
+        <label for="file">Image (optional):</label>
+        <input type="file" id="file" name="file" accept="image/*"><br><br>
+
+        <button type="submit">Upload</button>
+    </form>
+
+    <div id="response"></div>
+
+    <script>
+        document.getElementById("upload-form").addEventListener("submit", async (event) => {
+            event.preventDefault(); // Prevent the default form submission
+
+            const formData = new FormData();
+            formData.append("message", document.getElementById("message").value);
+            formData.append("group", document.getElementById("group").value);
+            formData.append("event", document.getElementById("event").value);
+            
+            // Check if there's a file selected and append it
+            const fileInput = document.getElementById("file");
+            if (fileInput.files.length > 0) {
+                formData.append("image", fileInput.files[0]);
+            }
+
+            // Send the POST request
+            try {
+                const response = await fetch("http://127.0.0.1:5000/upload", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                document.getElementById("response").innerText = JSON.stringify(result);
+            } catch (error) {
+                console.error("Error uploading:", error);
+                document.getElementById("response").innerText = "Error uploading: " + error.message;
+            }
+        });
+    </script>
+</body>
+</html>
