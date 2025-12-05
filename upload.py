@@ -1,7 +1,7 @@
 import os
 import io
 from PIL import Image
-from psycopg import AsyncConnection, sql
+from psycopg import AsyncConnection
 from fastapi import FastAPI, UploadFile, Form
 
 db_params = {
@@ -16,7 +16,7 @@ app = FastAPI()
 
 @app.get("/")
 def index():
-    return {"message": "Welcome to the Thanksgiving App!"}
+    return {"upload:app": "Welcome to the Thanksgiving App!"}
 
 @app.post("/upload")
 async def upload(
@@ -41,19 +41,17 @@ async def upload(
     # insert into database
     async with await AsyncConnection.connect(**db_params) as con:
         async with con.cursor() as cur:
-            insert_query = sql.SQL("""
+            await cur.execute("""
                 INSERT INTO messages
-                (message, image, user_name, group_name, event)
-                VALUES (%s, %s, %s, %s, %s);
-            """)
-            values = (message, img_binary, user_name, group_name, event)
-            await cur.execute(insert_query, values)
+                (message, user_name, group_name, event)
+                VALUES (%s, %s, %s, %s);
+            """, (message, user_name, group_name, event))
+            if image:
+                await cur.execute("""
+                    INSERT INTO images
+                    (message, image, user_name, group_name, event)
+                    VALUES (%s, %s, %s, %s, %s);
+                """, (message, img_binary, user_name, group_name, event))
             await con.commit()
     status = "success"
     return {"status": status, "error": error_msg, "warning": warning_msg}
-
-@app.get("/get_messages")
-async def get_messages(N_msg: int):
-    async with await AsyncConnection.connect(**db_params) as con:
-        async with con.cursor() as cur:
-            await cur.execute()

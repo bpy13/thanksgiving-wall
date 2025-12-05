@@ -10,8 +10,10 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
-  web:
+  
+  upload-server:
     build: .
+    command: uvicorn upload:app --host 0.0.0.0 --port 5000
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: 20anniversary
@@ -20,6 +22,20 @@ services:
       POSTGRES_PORT: 5432
     ports:
       - "5000:5000"
+    depends_on:
+      - postgres
+  
+  display-server:
+    build: .
+    command: uvicorn display:app --host 0.0.0.0 --port 5001
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 20anniversary
+      POSTGRES_DB: thanksgiving
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "5001:5001"
     depends_on:
       - postgres
 
