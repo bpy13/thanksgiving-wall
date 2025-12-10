@@ -1,8 +1,11 @@
 import os
 import io
+import httpx
 from PIL import Image
 from psycopg import AsyncConnection
-from fastapi import FastAPI, UploadFile, Form
+from datetime import datetime, timezone, timedelta
+from fastapi import FastAPI, UploadFile, Form, Request
+from fastapi.templating import Jinja2Templates
 
 db_params = {
     "host": os.getenv("POSTGRES_HOST"),
@@ -13,10 +16,13 @@ db_params = {
 }
 
 app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+display_service_url = os.getenv("DISPLAY_SERVICE_URL", "http://localhost:8001")
 
 @app.get("/")
-def index():
-    return {"upload:app": "Welcome to the Thanksgiving App!"}
+async def index(request: Request):
+    """Serve the upload page from templates/upload.html"""
+    return templates.TemplateResponse("upload.html", {"request": request})
 
 @app.post("/upload")
 async def upload(
@@ -26,32 +32,56 @@ async def upload(
     event: str = Form(""),
     image: UploadFile | None = None
 ):
-    """Upload to database: message (required) + image (optional)"""
+    """Endpoint to upload form data to database and notify display service"""
     status = "failed"
-    error_msg = None
     warning_msg = None
-    # validate uploaded image (if any)
-    img_binary = None
+    # validate the uploaded image (if any)
+    img = None
     if image:
         img_binary = await image.read()
-        try: # by directly opening the image with Pillow
+        try: # try-except by directly opening the image with Pillow
             img = Image.open(io.BytesIO(img_binary))
         except:
             warning_msg = "Uploaded file is not a valid image"
-    # insert into database
-    async with await AsyncConnection.connect(**db_params) as con:
+    # insert into the database
+    try:
+        con = await AsyncConnection.connect(**db_params)
         async with con.cursor() as cur:
+            # Always insert message
             await cur.execute("""
                 INSERT INTO messages
-                (message, user_name, group_name, event)
-                VALUES (%s, %s, %s, %s);
-            """, (message, user_name, group_name, event))
-            if image:
+                (message, has_image, user_name, group_name, event)
+                VALUES (%s, %s, %s, %s, %s);
+            """, (message, image is not None, user_name, group_name, event))
+            # Insert image if provided
+            if img:
                 await cur.execute("""
                     INSERT INTO images
                     (message, image, user_name, group_name, event)
                     VALUES (%s, %s, %s, %s, %s);
                 """, (message, img_binary, user_name, group_name, event))
             await con.commit()
+    except Exception as e:
+        error_msg = f"Database error: {e}"
+        return {"status": status, "error": error_msg, "warning": warning_msg}
+    finally:
+        await con.close()
+    # Broadcast new message to the display service if upload is successful
+    try:
+        upload_time = datetime.now(timezone(timedelta(hours=8))).isoformat()
+        data = {
+            "message": message,
+            "user_name": user_name or "Anonymous",
+            "group_name": group_name or "",
+            "event": event or "",
+            "upload_time": upload_time,
+            "has_image": image is not None
+        }
+        # Notify the display service
+        async with httpx.AsyncClient() as client:
+            await client.post(f"{display_service_url}/notify", json=data)
+    except Exception as e:
+        warning_msg = f"Failed to broadcast message: {e}"
+        return {"status": status, "error": error_msg, "warning": warning_msg}
     status = "success"
-    return {"status": status, "error": error_msg, "warning": warning_msg}
+    return {"status": status, "error": None, "warning": warning_msg}

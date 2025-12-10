@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>感恩牆 — 分享你的訊息</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #000000;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            padding: 15px 0;
+            flex-shrink: 0;
+            background: rgba(0,0,0,0.8);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            margin: 0;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            background: rgba(0,0,0,0.3);
+            color: white;
+        }
+        
+        .status.connected {
+            background: rgba(76, 175, 80, 0.8);
+        }
+        
+        .status.disconnected {
+            background: rgba(244, 67, 54, 0.8);
+        }
+        
+        .main-container {
+            display: flex;
+            height: calc(100vh - 120px);
+            overflow: hidden;
+        }
+        
+        .images-section {
+            width: 75%;
+            height: 100%;
+            background: #000000;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .messages-container {
+            width: 25%;
+            height: 100%;
+            background: #000000;
+            overflow-y: auto;
+            padding: 0;
+            border-left: 3px solid #333333;
+        }
+        
+        .message {
+            background: #000000;
+            border-radius: 0;
+            padding: 15px;
+            margin-bottom: 1px;
+            border-bottom: 1px solid #333333;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideIn 0.5s forwards;
+        }
+        
+        .message.new {
+            animation: slideIn 0.5s forwards;
+        }
+        
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message-content {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin-bottom: 8px;
+            color: #ffffff;
+            word-wrap: break-word;
+        }
+        
+        .message-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            color: #cccccc;
+            font-size: 0.75rem;
+            flex-wrap: wrap;
+        }
+        
+        .message-author {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .message-group {
+            font-style: italic;
+            color: #aaaaaa;
+        }
+        
+        .message-time {
+            color: #888888;
+            font-size: 0.7rem;
+        }
+        
+        .image-indicator {
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            padding: 1px 5px;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            margin-left: 5px;
+        }
+        
+        .image-display {
+            width: 100%;
+            height: 100%;
+            display: none;
+            position: relative;
+        }
+        
+        .image-display.active {
+            display: block;
+        }
+        
+        .current-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .image-message {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px 20px;
+        }
+        
+        .image-message-text {
+            font-size: 1.1rem;
+            line-height: 1.3;
+            margin-bottom: 5px;
+        }
+        
+        .image-message-author {
+            font-size: 0.9rem;
+            color: #4CAF50;
+            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .image-message-meta {
+            font-size: 0.8rem;
+            color: #cccccc;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        .image-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: #000000;
+        }
+        
+
+        
+        .no-messages {
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+            margin-top: 50px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.1rem;
+        }
+        
+        /* Scrollbar styling */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .messages-container::-webkit-scrollbar-track {
+            background: #111111;
+        }
+        
+        .messages-container::-webkit-scrollbar-thumb {
+            background: #444444;
+            border-radius: 3px;
+        }
+        
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: #666666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>感恩牆</h1>
+        <p>即時分享你的感恩訊息</p>
+    </div>
+    
+    <div id="status" class="status">
+        <span id="status-text">連線中...</span>
+    </div>
+    
+    <div class="main-container">
+        <div class="images-section">
+            <div class="image-placeholder" id="image-placeholder">
+                <div style="text-align: center; color: #ffffff; font-size: 1.5rem;">
+                    <div style="margin-bottom: 10px;">🖼️</div>
+                    <div style="font-size: 1rem; margin-top: 10px;">尚未有任何圖片。成為第一個分享圖片的人！</div>
+                </div>
+            </div>
+            <div class="image-display" id="image-display">
+                <img class="current-image" id="current-image" alt="Current image">
+                <div class="image-message" id="image-message">
+                    <div class="image-message-text" id="image-message-text"></div>
+                    <div class="image-message-author" id="image-message-author"></div>
+                    <div class="image-message-meta" id="image-message-meta"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="messages-container" class="messages-container">
+            <div id="loading" class="loading" style="padding: 20px; text-align: center; color: #ffffff;">載入中...</div>
+        </div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const statusTextEl = document.getElementById('status-text');
+        const messagesContainer = document.getElementById('messages-container');
+        const loadingEl = document.getElementById('loading');
+        const imagePlaceholder = document.getElementById('image-placeholder');
+        const imageDisplay = document.getElementById('image-display');
+        const currentImage = document.getElementById('current-image');
+        const imageMessage = document.getElementById('image-message');
+        const imageMessageText = document.getElementById('image-message-text');
+        const imageMessageAuthor = document.getElementById('image-message-author');
+        const imageMessageMeta = document.getElementById('image-message-meta');
+        
+        let ws = null;
+        let reconnectInterval = null;
+        let images = [];
+        let currentImageIndex = 0;
+        let imageRotationInterval = null;
+        
+        // Load initial data
+        async function loadInitialData() {
+            try {
+                // Load messages
+                const messagesResponse = await fetch('/messages?limit=20');
+                const messages = await messagesResponse.json();
+                
+                loadingEl.style.display = 'none';
+                
+                if (messages.length === 0) {
+                    messagesContainer.innerHTML = '<div class="no-messages" style="padding: 20px; text-align: center; color: #ffffff;">尚未有任何訊息。成為第一個分享訊息的人！</div>';
+                } else {
+                    messagesContainer.innerHTML = '';
+                    messages.reverse().forEach(message => {
+                        addMessage(message, false);
+                    });
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+                
+                // Load images
+                await loadImages();
+                
+            } catch (error) {
+                console.error('Failed to load initial data:', error);
+                messagesContainer.innerHTML = '<div class="no-messages" style="padding: 20px; text-align: center; color: #ffffff;">載入訊息失敗</div>';
+            }
+        }
+        
+        // Load images from database
+        async function loadImages() {
+            try {
+                const response = await fetch('/images');
+                const imageData = await response.json();
+                
+                images = imageData.map(img => ({
+                    ...img,
+                    blob: `data:image/jpeg;base64,${img.image}`
+                }));
+                
+                if (images.length > 0) {
+                    showImage(0);
+                    startImageRotation();
+                } else {
+                    showImagePlaceholder();
+                }
+                
+            } catch (error) {
+                console.error('Failed to load images:', error);
+                showImagePlaceholder();
+            }
+        }
+        
+        // Show image at index
+        function showImage(index) {
+            if (images.length === 0) {
+                showImagePlaceholder();
+                return;
+            }
+            
+            currentImageIndex = index;
+            const image = images[index];
+            
+            // Set image
+            currentImage.src = image.blob;
+            currentImage.alt = `Image from ${image.user_name}: ${image.message}`;
+            
+            // Set message content
+            imageMessageText.textContent = image.message;
+            imageMessageAuthor.textContent = image.user_name;
+            
+            // Set metadata - more concise for bottom bar
+            let metaText = '';
+            if (image.group_name) {
+                metaText += image.group_name;
+            }
+            if (image.upload_time) {
+                const time = new Date(image.upload_time).toLocaleString('zh-TW', {
+                    timeZone: 'Asia/Hong_Kong',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                metaText += (metaText ? ' • ' : '') + time;
+            }
+            imageMessageMeta.textContent = metaText;
+            
+            // Show image display, hide placeholder
+            imagePlaceholder.style.display = 'none';
+            imageDisplay.classList.add('active');
+        }
+        
+        // Show placeholder when no images
+        function showImagePlaceholder() {
+            imageDisplay.classList.remove('active');
+            imagePlaceholder.style.display = 'flex';
+        }
+        
+        // Start automatic image rotation
+        function startImageRotation() {
+            if (images.length <= 1) return;
+            
+            if (imageRotationInterval) {
+                clearInterval(imageRotationInterval);
+            }
+            
+            imageRotationInterval = setInterval(() => {
+                const nextIndex = (currentImageIndex + 1) % images.length;
+                showImage(nextIndex);
+            }, 10000); // Change image every 10 seconds
+        }
+        
+
+        
+        // Add message to display
+        function addMessage(messageData, isNew = true) {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${isNew ? 'new' : ''}`;
+            
+            const time = messageData.upload_time ? 
+                new Date(messageData.upload_time).toLocaleString('zh-TW', {
+                    timeZone: 'Asia/Hong_Kong',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) : 
+                'Just now';
+            
+            messageEl.innerHTML = `
+                <div class="message-content">${escapeHtml(messageData.message)}</div>
+                <div class="message-meta">
+                    <div>
+                        <span class="message-author">${escapeHtml(messageData.user_name)}</span>
+                        ${messageData.group_name ? `<span class="message-group">${escapeHtml(messageData.group_name)}</span>` : ''}
+                        ${messageData.has_image ? '<span class="image-indicator">圖片</span>' : ''}
+                    </div>
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+            
+            // Remove "no messages" placeholder if it exists
+            const noMessages = messagesContainer.querySelector('.no-messages');
+            if (noMessages) {
+                noMessages.remove();
+            }
+            
+            if (isNew) {
+                messagesContainer.appendChild(messageEl);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } else {
+                messagesContainer.appendChild(messageEl);
+            }
+        }
+        
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Connect to WebSocket
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                statusEl.className = 'status connected';
+                statusTextEl.textContent = '已連接';
+                
+                // Clear reconnect interval if it exists
+                if (reconnectInterval) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'new_message') {
+                        addMessage(data.data, true);
+                        
+                        // If the new message has an image, reload images
+                        if (data.data.has_image) {
+                            setTimeout(() => loadImages(), 1000); // Small delay for database consistency
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                statusEl.className = 'status disconnected';
+                statusTextEl.textContent = '未連接';
+                
+                // Attempt to reconnect
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(() => {
+                        connectWebSocket();
+                    }, 3000);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                statusEl.className = 'status disconnected';
+                statusTextEl.textContent = 'Connection error';
+            };
+        }
+        
+
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadInitialData();
+            connectWebSocket();
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>

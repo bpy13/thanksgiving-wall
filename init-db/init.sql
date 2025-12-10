@@ -1,9 +1,12 @@
+SET timezone = 'Asia/Hong_Kong';
+
 CREATE TABLE IF NOT EXISTS messages (
     message TEXT NOT NULL,
+    has_image BOOLEAN,
     user_name TEXT,
     group_name TEXT,
     event TEXT,
-    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    upload_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS images (
@@ -12,12 +15,5 @@ CREATE TABLE IF NOT EXISTS images (
     user_name TEXT,
     group_name TEXT,
     event TEXT,
-    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS display (
-    message_start_index INT,
-    message_end_index INT,
-    image_start_index INT,
-    image_end_index INT
+    upload_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
