@@ -82,7 +82,7 @@ async def get_images(limit: int = 20):
                 SELECT
                 message, image, user_name, group_name, event, upload_time
                 FROM images 
-                ORDER BY upload_time DESC 
+                ORDER BY RANDOM() 
                 LIMIT %s
             """, (limit,))
             images = await cur.fetchall()

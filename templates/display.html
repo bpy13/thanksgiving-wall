@@ -284,8 +284,8 @@
         
         let ws = null;
         let reconnectInterval = null;
-        let images = [];
-        let currentImageIndex = 0;
+        let initialImages = []; // Images from /images endpoint
+        let realtimeImages = []; // Images from WebSocket
         let imageRotationInterval = null;
         
         // Load initial data
@@ -308,7 +308,14 @@
                 }
                 
                 // Load images
-                await loadImages();
+                await refreshImages();
+                
+                if (hasImages()) {
+                    await showImage();
+                    startImageRotation();
+                } else {
+                    showImagePlaceholder();
+                }
                 
             } catch (error) {
                 console.error('Failed to load initial data:', error);
@@ -316,40 +323,66 @@
             }
         }
         
-        // Load images from database
-        async function loadImages() {
-            try {
-                const response = await fetch('/images');
-                const imageData = await response.json();
+        // Check if we have images in either queue
+        function hasImages() {
+            return realtimeImages.length > 0 || initialImages.length > 0;
+        }
+        
+
+        
+        // Show first image from active queue and discard it
+        async function showImage() {
+            // Check realtime queue first
+            if (realtimeImages.length > 0) {
+                const image = realtimeImages.shift(); // Get and remove first image
+                displayImage(image);
+                return;
+            }
+            
+            // Use initial queue if realtime is empty
+            if (initialImages.length > 0) {
+                const image = initialImages.shift(); // Get and remove first image
+                displayImage(image);
                 
-                images = imageData.map(img => ({
-                    ...img,
-                    blob: `data:image/jpeg;base64,${img.image}`
-                }));
-                
-                if (images.length > 0) {
-                    showImage(0);
-                    startImageRotation();
-                } else {
-                    showImagePlaceholder();
+                // If this was the last image, refresh database for next rotation
+                if (initialImages.length === 0) {
+                    console.log('Initial queue empty, refreshing from database...');
+                    await refreshImages();
                 }
-                
-            } catch (error) {
-                console.error('Failed to load images:', error);
+                return;
+            }
+            
+            // Both queues empty, try to refresh and show if available
+            console.log('Both queues empty, refreshing from database...');
+            await refreshImages();
+            
+            if (initialImages.length > 0) {
+                const image = initialImages.shift();
+                displayImage(image);
+            } else {
                 showImagePlaceholder();
             }
         }
         
-        // Show image at index
-        function showImage(index) {
-            if (images.length === 0) {
+        // Refresh images from database
+        async function refreshImages() {
+            try {
+                const response = await fetch('/images');
+                const imageData = await response.json();
+                
+                initialImages = imageData.map(img => ({
+                    ...img,
+                    blob: `data:image/jpeg;base64,${img.image}`
+                }));
+                
+            } catch (error) {
+                console.error('Failed to refresh images:', error);
                 showImagePlaceholder();
-                return;
             }
-            
-            currentImageIndex = index;
-            const image = images[index];
-            
+        }
+        
+        // Helper function to display an image
+        function displayImage(image) {
             // Set image
             currentImage.src = image.blob;
             currentImage.alt = `Image from ${image.user_name}: ${image.message}`;
@@ -389,15 +422,14 @@
         
         // Start automatic image rotation
         function startImageRotation() {
-            if (images.length <= 1) return;
+            if ((realtimeImages.length + initialImages.length) <= 1) return;
             
             if (imageRotationInterval) {
                 clearInterval(imageRotationInterval);
             }
             
-            imageRotationInterval = setInterval(() => {
-                const nextIndex = (currentImageIndex + 1) % images.length;
-                showImage(nextIndex);
+            imageRotationInterval = setInterval(async () => {
+                await showImage(); // This will automatically handle queue management
             }, 10000); // Change image every 10 seconds
         }
         
@@ -478,9 +510,21 @@
                     if (data.type === 'new_message') {
                         addMessage(data.data, true);
                         
-                        // If the new message has an image, reload images
-                        if (data.data.has_image) {
-                            setTimeout(() => loadImages(), 1000); // Small delay for database consistency
+                        // If the new message has an image, add to realtime queue
+                        if (data.data.image) {
+                            const newImage = {
+                                ...data.data,
+                                blob: `data:image/jpeg;base64,${data.data.image}`
+                            };
+                            
+                            realtimeImages.push(newImage);
+                            
+                            // If no images are currently showing, start showing this one
+                            if (!hasImages() || (realtimeImages.length === 1 && initialImages.length === 0)) {
+                                showImage().then(() => {
+                                    startImageRotation();
+                                });
+                            }
                         }
                     }
                 } catch (error) {

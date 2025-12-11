@@ -1,6 +1,7 @@
 import os
 import io
 import httpx
+import base64
 from PIL import Image
 from psycopg import AsyncConnection
 from datetime import datetime, timezone, timedelta
@@ -77,6 +78,9 @@ async def upload(
             "upload_time": upload_time,
             "has_image": image is not None
         }
+        # If there's an image, include it in the broadcast
+        if img:
+            data["image"] = base64.b64encode(img_binary).decode('utf-8')
         # Notify the display service
         async with httpx.AsyncClient() as client:
             await client.post(f"{display_service_url}/notify", json=data)
