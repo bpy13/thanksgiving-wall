@@ -287,6 +287,7 @@
         let initialImages = []; // Images from /images endpoint
         let realtimeImages = []; // Images from WebSocket
         let imageRotationInterval = null;
+        let databaseFilled = false;
         
         // Load initial data
         async function loadInitialData() {
@@ -294,9 +295,7 @@
                 // Load messages
                 const messagesResponse = await fetch('/messages?limit=20');
                 const messages = await messagesResponse.json();
-                
                 loadingEl.style.display = 'none';
-                
                 if (messages.length === 0) {
                     messagesContainer.innerHTML = '<div class="no-messages" style="padding: 20px; text-align: center; color: #ffffff;">尚未有任何訊息。成為第一個分享訊息的人！</div>';
                 } else {
@@ -306,61 +305,33 @@
                     });
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 }
-                
                 // Load images
                 await refreshImages();
-                
-                if (hasImages()) {
-                    await showImage();
-                    startImageRotation();
+                if (realtimeImages.length + initialImages.length === 0) {
+                    imageDisplay.classList.remove('active');
+                    imagePlaceholder.style.display = 'flex';
                 } else {
-                    showImagePlaceholder();
+                    await showImage();
+                    if (initialImages.length + realtimeImages.length > 0) {
+                        databaseFilled = true;
+                        startImageRotation();
+                    }
                 }
-                
             } catch (error) {
                 console.error('Failed to load initial data:', error);
                 messagesContainer.innerHTML = '<div class="no-messages" style="padding: 20px; text-align: center; color: #ffffff;">載入訊息失敗</div>';
             }
         }
         
-        // Check if we have images in either queue
-        function hasImages() {
-            return realtimeImages.length > 0 || initialImages.length > 0;
-        }
-        
-
-        
         // Show first image from active queue and discard it
-        async function showImage() {
+        function showImage() {
             // Check realtime queue first
             if (realtimeImages.length > 0) {
                 const image = realtimeImages.shift(); // Get and remove first image
                 displayImage(image);
-                return;
-            }
-            
-            // Use initial queue if realtime is empty
-            if (initialImages.length > 0) {
+            } else if (initialImages.length > 0) {
                 const image = initialImages.shift(); // Get and remove first image
                 displayImage(image);
-                
-                // If this was the last image, refresh database for next rotation
-                if (initialImages.length === 0) {
-                    console.log('Initial queue empty, refreshing from database...');
-                    await refreshImages();
-                }
-                return;
-            }
-            
-            // Both queues empty, try to refresh and show if available
-            console.log('Both queues empty, refreshing from database...');
-            await refreshImages();
-            
-            if (initialImages.length > 0) {
-                const image = initialImages.shift();
-                displayImage(image);
-            } else {
-                showImagePlaceholder();
             }
         }
         
@@ -369,15 +340,15 @@
             try {
                 const response = await fetch('/images');
                 const imageData = await response.json();
-                
                 initialImages = imageData.map(img => ({
                     ...img,
                     blob: `data:image/jpeg;base64,${img.image}`
                 }));
-                
+                if (initialImages.length + realtimeImages.length > 1) {
+                    databaseFilled = true;
+                }
             } catch (error) {
                 console.error('Failed to refresh images:', error);
-                showImagePlaceholder();
             }
         }
         
@@ -386,11 +357,9 @@
             // Set image
             currentImage.src = image.blob;
             currentImage.alt = `Image from ${image.user_name}: ${image.message}`;
-            
             // Set message content
             imageMessageText.textContent = image.message;
             imageMessageAuthor.textContent = image.user_name;
-            
             // Set metadata - more concise for bottom bar
             let metaText = '';
             if (image.group_name) {
@@ -408,38 +377,30 @@
                 metaText += (metaText ? ' • ' : '') + time;
             }
             imageMessageMeta.textContent = metaText;
-            
             // Show image display, hide placeholder
-            imagePlaceholder.style.display = 'none';
+            if (imagePlaceholder.style.display !== 'none') imagePlaceholder.style.display = 'none';
             imageDisplay.classList.add('active');
-        }
-        
-        // Show placeholder when no images
-        function showImagePlaceholder() {
-            imageDisplay.classList.remove('active');
-            imagePlaceholder.style.display = 'flex';
         }
         
         // Start automatic image rotation
         function startImageRotation() {
-            if ((realtimeImages.length + initialImages.length) <= 1) return;
-            
             if (imageRotationInterval) {
                 clearInterval(imageRotationInterval);
             }
-            
             imageRotationInterval = setInterval(async () => {
                 await showImage(); // This will automatically handle queue management
-            }, 10000); // Change image every 10 seconds
+                if (initialImages.length + realtimeImages.length === 0 && databaseFilled) {
+                    // If initial queue is now empty and DB is filled, refresh from DB
+                    console.log('Initial images exhausted, refreshing from database...');
+                    await refreshImages();
+                }
+            }, 5000); // Change image every 10 seconds
         }
-        
-
         
         // Add message to display
         function addMessage(messageData, isNew = true) {
             const messageEl = document.createElement('div');
             messageEl.className = `message ${isNew ? 'new' : ''}`;
-            
             const time = messageData.upload_time ? 
                 new Date(messageData.upload_time).toLocaleString('zh-TW', {
                     timeZone: 'Asia/Hong_Kong',
@@ -450,7 +411,6 @@
                     minute: '2-digit'
                 }) : 
                 'Just now';
-            
             messageEl.innerHTML = `
                 <div class="message-content">${escapeHtml(messageData.message)}</div>
                 <div class="message-meta">
@@ -462,13 +422,11 @@
                     <div class="message-time">${time}</div>
                 </div>
             `;
-            
             // Remove "no messages" placeholder if it exists
             const noMessages = messagesContainer.querySelector('.no-messages');
             if (noMessages) {
                 noMessages.remove();
             }
-            
             if (isNew) {
                 messagesContainer.appendChild(messageEl);
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -488,42 +446,36 @@
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
             ws = new WebSocket(wsUrl);
-            
             ws.onopen = function() {
                 console.log('WebSocket connected');
                 statusEl.className = 'status connected';
                 statusTextEl.textContent = '已連接';
-                
                 // Clear reconnect interval if it exists
                 if (reconnectInterval) {
                     clearInterval(reconnectInterval);
                     reconnectInterval = null;
                 }
             };
-            
-            ws.onmessage = function(event) {
+            ws.onmessage = async function(event) {
                 try {
                     const data = JSON.parse(event.data);
-                    
                     if (data.type === 'new_message') {
                         addMessage(data.data, true);
-                        
                         // If the new message has an image, add to realtime queue
                         if (data.data.image) {
                             const newImage = {
                                 ...data.data,
                                 blob: `data:image/jpeg;base64,${data.data.image}`
                             };
-                            
                             realtimeImages.push(newImage);
-                            
-                            // If no images are currently showing, start showing this one
-                            if (!hasImages() || (realtimeImages.length === 1 && initialImages.length === 0)) {
-                                showImage().then(() => {
-                                    startImageRotation();
-                                });
+                            // If currently showing placeholder, start showing this image
+                            if (imagePlaceholder.style.display === 'flex') {
+                                await showImage();
+                            } else if (!imageRotationInterval) {
+                                await showImage();
+                                await refreshImages();
+                                startImageRotation();
                             }
                         }
                     }
@@ -531,12 +483,10 @@
                     console.error('Error processing message:', error);
                 }
             };
-            
             ws.onclose = function() {
                 console.log('WebSocket disconnected');
                 statusEl.className = 'status disconnected';
                 statusTextEl.textContent = '未連接';
-                
                 // Attempt to reconnect
                 if (!reconnectInterval) {
                     reconnectInterval = setInterval(() => {
@@ -544,15 +494,12 @@
                     }, 3000);
                 }
             };
-            
             ws.onerror = function(error) {
                 console.error('WebSocket error:', error);
                 statusEl.className = 'status disconnected';
                 statusTextEl.textContent = 'Connection error';
             };
         }
-        
-
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {

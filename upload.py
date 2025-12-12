@@ -72,7 +72,7 @@ async def upload(
         upload_time = datetime.now(timezone(timedelta(hours=8))).isoformat()
         data = {
             "message": message,
-            "user_name": user_name or "Anonymous",
+            "user_name": user_name or "匿名",
             "group_name": group_name or "",
             "event": event or "",
             "upload_time": upload_time,
