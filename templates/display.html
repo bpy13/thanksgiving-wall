@@ -293,7 +293,7 @@
         async function loadInitialData() {
             try {
                 // Load messages
-                const messagesResponse = await fetch('/messages?limit=20');
+                const messagesResponse = await fetch('/messages');
                 const messages = await messagesResponse.json();
                 loadingEl.style.display = 'none';
                 if (messages.length === 0) {
@@ -388,17 +388,21 @@
                 clearInterval(imageRotationInterval);
             }
             imageRotationInterval = setInterval(async () => {
-                await showImage(); // This will automatically handle queue management
+                await showImage();
                 if (initialImages.length + realtimeImages.length === 0 && databaseFilled) {
-                    // If initial queue is now empty and DB is filled, refresh from DB
-                    console.log('Initial images exhausted, refreshing from database...');
                     await refreshImages();
                 }
-            }, 5000); // Change image every 10 seconds
+            }, 10000); // Change image every 10 seconds
         }
         
         // Add message to display
         function addMessage(messageData, isNew = true) {
+            // Remove "no messages" placeholder if it exists
+            const noMessages = messagesContainer.querySelector('.no-messages');
+            if (noMessages) {
+                noMessages.remove();
+            }
+            // main
             const messageEl = document.createElement('div');
             messageEl.className = `message ${isNew ? 'new' : ''}`;
             const time = messageData.upload_time ? 
@@ -422,16 +426,9 @@
                     <div class="message-time">${time}</div>
                 </div>
             `;
-            // Remove "no messages" placeholder if it exists
-            const noMessages = messagesContainer.querySelector('.no-messages');
-            if (noMessages) {
-                noMessages.remove();
-            }
+            messagesContainer.appendChild(messageEl);
             if (isNew) {
-                messagesContainer.appendChild(messageEl);
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            } else {
-                messagesContainer.appendChild(messageEl);
             }
         }
         
@@ -448,7 +445,6 @@
             const wsUrl = `${protocol}//${window.location.host}/ws`;
             ws = new WebSocket(wsUrl);
             ws.onopen = function() {
-                console.log('WebSocket connected');
                 statusEl.className = 'status connected';
                 statusTextEl.textContent = '已連接';
                 // Clear reconnect interval if it exists
@@ -484,7 +480,6 @@
                 }
             };
             ws.onclose = function() {
-                console.log('WebSocket disconnected');
                 statusEl.className = 'status disconnected';
                 statusTextEl.textContent = '未連接';
                 // Attempt to reconnect

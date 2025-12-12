@@ -25,14 +25,10 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        N_client = len(self.active_connections)
-        print(f"Client connected. Total connections: {N_client}")
     
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-            N_client = len(self.active_connections)
-            print(f"Client disconnected. Total connections: {N_client}")
     
     async def broadcast_message(self, message: Dict[str, Any]):
         """Broadcast new message from upload service to all clients"""
@@ -59,8 +55,8 @@ async def get_messages(limit: int = 20):
             await cur.execute("""
                 SELECT
                 message, has_image, user_name, group_name, event, upload_time
-                FROM messages 
-                ORDER BY upload_time DESC 
+                FROM messages
+                ORDER BY upload_time DESC
                 LIMIT %s
             """, (limit,))
             messages = await cur.fetchall()
@@ -74,15 +70,15 @@ async def get_messages(limit: int = 20):
             } for msg in messages]
 
 @app.get("/images")
-async def get_images(limit: int = 20):
+async def get_images(limit: int = 10):
     """Get recent images for display"""
     async with await AsyncConnection.connect(**db_params) as con:
         async with con.cursor() as cur:
             await cur.execute("""
                 SELECT
                 message, image, user_name, group_name, event, upload_time
-                FROM images 
-                ORDER BY RANDOM() 
+                FROM images
+                ORDER BY RANDOM()
                 LIMIT %s
             """, (limit,))
             images = await cur.fetchall()

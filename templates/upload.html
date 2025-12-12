@@ -188,7 +188,7 @@
     <div class="container">
         <div class="header">
             <h1>感恩牆</h1>
-            <p>分享你的感恩訊息</p>
+            <p>即時分享你的感恩訊息</p>
         </div>
         
         <form id="upload-form">
@@ -199,17 +199,17 @@
 
             <div class="form-group">
                 <label for="user_name">你的名字</label>
-                <input type="text" id="user_name" name="user_name" placeholder="匿名">
+                <input type="text" id="user_name" name="user_name" placeholder="匿名...">
             </div>
 
             <div class="form-group">
                 <label for="group_name">所屬團體</label>
-                <input type="text" id="group_name" name="group_name" placeholder="例如：成崇，D21">
+                <input type="text" id="group_name" name="group_name" placeholder="例如：成崇、D21...">
             </div>
 
             <div class="form-group">
                 <label for="event">活動</label>
-                <input type="text" id="event" name="event" placeholder="例如：感恩崇拜">
+                <input type="text" id="event" name="event" placeholder="例如：感恩分享會...">
             </div>
 
             <div class="form-group">
@@ -298,7 +298,7 @@
                     response.className = "response success";
                     response.innerHTML = `
                         <strong>✅ 訊息分享成功！</strong><br>
-                        ${result.warning ? `<em>⚠️ 上傳檔案是錯誤的圖片格式！</em><br>` : ''}
+                        ${result.warning ? `<em>⚠️ 上傳檔案爲錯誤的圖片格式！</em><br>` : ''}
                         你的訊息將會顯示在螢幕上。
                     `;
                     
