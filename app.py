@@ -121,7 +121,7 @@ async def display_page(request: Request):
 @app.get("/messages")
 async def get_messages(limit: int = 20):
     """Get recent messages for initial load"""
-    async with await AsyncConnection.connect(**db_params) as con:
+    async with await AsyncConnection.connect(database_url) as con:
         async with con.cursor() as cur:
             await cur.execute("""
                 SELECT
@@ -143,7 +143,7 @@ async def get_messages(limit: int = 20):
 @app.get("/images")
 async def get_images(limit: int = 10):
     """Get recent images for display"""
-    async with await AsyncConnection.connect(**db_params) as con:
+    async with await AsyncConnection.connect(database_url) as con:
         async with con.cursor() as cur:
             await cur.execute("""
                 SELECT
