@@ -11,17 +11,6 @@ from fastapi.templating import Jinja2Templates
 
 # Database connection - supports both Heroku DATABASE_URL and individual env vars
 database_url = os.getenv("DATABASE_URL")
-if database_url and database_url.startswith("postgres://"):
-    # Heroku uses postgres:// but psycopg requires postgresql://
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-db_params = database_url if database_url else {
-    "host": os.getenv("POSTGRES_HOST"),
-    "port": os.getenv("POSTGRES_PORT"),
-    "dbname": os.getenv("POSTGRES_DB"),
-    "user": os.getenv("POSTGRES_USER"),
-    "password": os.getenv("POSTGRES_PASSWORD")
-}
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -79,7 +68,7 @@ async def upload(
             warning_msg = "Uploaded file is not a valid image"
     # Insert into the database
     try:
-        con = await AsyncConnection.connect(**db_params)
+        con = await AsyncConnection.connect(database_url)
         async with con.cursor() as cur:
             # Always insert message
             await cur.execute("""
