@@ -1,0 +1,24 @@
+{
+  "name": "thanksgiving-wall",
+  "description": "Real-time thanksgiving message and photo sharing application for church meetings",
+  "repository": "https://github.com/bpy13/thanksgiving-wall",
+  "stack": "container",
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    }
+  ],
+  "env": {
+    "TZ": {
+      "description": "Timezone for the application",
+      "value": "Asia/Hong_Kong"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  }
+}

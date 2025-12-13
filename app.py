@@ -1,12 +1,21 @@
 import os
+import io
 import json
 import base64
+from PIL import Image
 from typing import List, Dict, Any
 from psycopg import AsyncConnection
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from datetime import datetime, timezone, timedelta
+from fastapi import FastAPI, UploadFile, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
 
-db_params = {
+# Database connection - supports both Heroku DATABASE_URL and individual env vars
+database_url = os.getenv("DATABASE_URL")
+if database_url and database_url.startswith("postgres://"):
+    # Heroku uses postgres:// but psycopg requires postgresql://
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+db_params = database_url if database_url else {
     "host": os.getenv("POSTGRES_HOST"),
     "port": os.getenv("POSTGRES_PORT"),
     "dbname": os.getenv("POSTGRES_DB"),
@@ -31,7 +40,7 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
     
     async def broadcast_message(self, message: Dict[str, Any]):
-        """Broadcast new message from upload service to all clients"""
+        """Broadcast new message to all connected clients"""
         if self.active_connections:
             message_json = json.dumps(message)
             for connection in self.active_connections:
@@ -43,7 +52,80 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @app.get("/")
-async def index(request: Request):
+async def upload_page(request: Request):
+    """Serve the upload page from templates/upload.html"""
+    return templates.TemplateResponse("upload.html", {"request": request})
+
+@app.post("/upload")
+async def upload(
+    message: str = Form(...), # required
+    user_name: str = Form(""),
+    group_name: str = Form(""),
+    event: str = Form(""),
+    image: UploadFile | None = None
+):
+    """Endpoint to upload form data to database and broadcast to display clients"""
+    status = "failed"
+    warning_msg = None
+    error_msg = None
+    # Validate the uploaded image (if any)
+    img = None
+    img_binary = None
+    if image:
+        img_binary = await image.read()
+        try:
+            img = Image.open(io.BytesIO(img_binary))
+        except:
+            warning_msg = "Uploaded file is not a valid image"
+    # Insert into the database
+    try:
+        con = await AsyncConnection.connect(**db_params)
+        async with con.cursor() as cur:
+            # Always insert message
+            await cur.execute("""
+                INSERT INTO messages
+                (message, has_image, user_name, group_name, event)
+                VALUES (%s, %s, %s, %s, %s);
+            """, (message, image is not None, user_name, group_name, event))
+            # Insert image if provided
+            if img:
+                await cur.execute("""
+                    INSERT INTO images
+                    (message, image, user_name, group_name, event)
+                    VALUES (%s, %s, %s, %s, %s);
+                """, (message, img_binary, user_name, group_name, event))
+            await con.commit()
+    except Exception as e:
+        error_msg = f"Database error: {e}"
+        return {"status": status, "error": error_msg, "warning": warning_msg}
+    finally:
+        await con.close()
+    # Broadcast new message to all display clients in real-time
+    try:
+        upload_time = datetime.now(timezone(timedelta(hours=8))).isoformat()
+        data = {
+            "message": message,
+            "user_name": user_name or "匿名",
+            "group_name": group_name or "",
+            "event": event or "",
+            "upload_time": upload_time,
+            "has_image": image is not None
+        }
+        # If there's an image, include it in the broadcast
+        if img:
+            data["image"] = base64.b64encode(img_binary).decode('utf-8')
+        # Broadcast to all connected WebSocket clients
+        await manager.broadcast_message({
+            "type": "new_message",
+            "data": data
+        })
+    except Exception as e:
+        warning_msg = f"Failed to broadcast message: {e}"
+    status = "success"
+    return {"status": status, "error": error_msg, "warning": warning_msg}
+
+@app.get("/display")
+async def display_page(request: Request):
     """Display page with real-time comment feed"""
     return templates.TemplateResponse("display.html", {"request": request})
 
@@ -100,12 +182,3 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
-@app.post("/notify")
-async def notify(data: dict):
-    """Internal endpoint called by upload service to broadcast new message"""
-    await manager.broadcast_message({
-        "type": "new_message", # for display.html
-        "data": data
-    })
-    return {"status": "broadcasted"}

@@ -1,0 +1,9 @@
+# Exclude development and documentation files from Heroku slug
+*.md
+.git
+.gitignore
+__pycache__/
+*.pyc
+docker-compose.yml
+.vscode/
+.idea/
