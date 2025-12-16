@@ -11,6 +11,13 @@ from fastapi.templating import Jinja2Templates
 
 # Database connection - supports both Heroku DATABASE_URL and individual env vars
 database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    dbname = os.getenv("POSTGRES_DB", "thanksgiving_db")
+    user = os.getenv("POSTGRES_USER", "thanksgiving_user")
+    password = os.getenv("POSTGRES_PASSWORD", "password")
+    database_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
