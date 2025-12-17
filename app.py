@@ -196,7 +196,7 @@ async def reset_database():
 
 @app.post("/admin/stress-test")
 async def run_stress_test(
-    request: Request, users: int = 10, duration: str = "30s"):
+    request: Request, users: int = 20, duration: str = "20s"):
     """Trigger Locust stress test via API endpoint (non-blocking)"""
     # Get the actual host URL dynamically (works for localhost and Heroku)
     host_url = f"{request.url.scheme}://{request.url.netloc}"
