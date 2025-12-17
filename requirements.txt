@@ -1,6 +1,7 @@
 fastapi
 httpx
 jinja2
+locust
 pillow
 psycopg[binary]
 python-multipart

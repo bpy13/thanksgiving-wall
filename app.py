@@ -2,6 +2,7 @@ import os
 import io
 import json
 import base64
+import asyncio
 from PIL import Image
 from typing import List, Dict, Any
 from psycopg import AsyncConnection
@@ -168,6 +169,54 @@ async def get_images(limit: int = 10):
                 "event": img[4] or "",
                 "upload_time": img[5].isoformat()
             } for img in images]
+
+@app.get("/admin/health-check")
+async def health_check():
+    """Health check endpoint for monitoring and testing"""
+    try:
+        # Test database by calling actual endpoints
+        await get_messages(limit=1)
+        await get_images(limit=1)
+        health = "healthy"
+        error_msg = None
+    except Exception as e:
+        health = "unhealthy"
+        error_msg = str(e)
+    return {"status": health, "error": error_msg}
+
+@app.post("/admin/reset-database")
+async def reset_database():
+    """Reset database for testing purposes - USE WITH CAUTION"""
+    async with await AsyncConnection.connect(database_url) as con:
+        async with con.cursor() as cur:
+            await cur.execute(
+                "TRUNCATE TABLE images, messages RESTART IDENTITY CASCADE")
+            await con.commit()
+    return {"status": "success", "message": "Database reset successfully"}
+
+@app.post("/admin/stress-test")
+async def run_stress_test(users: int = 10, duration: str = "30s"):
+    """Trigger Locust stress test via API endpoint (non-blocking)"""
+    # Run Locust stress test asynchronously (non-blocking)
+    cmd = [
+        "locust",
+        "-f", "locustfile.py",
+        "--host", "http://localhost:8000",
+        "--headless",
+        "--users", str(users),
+        "--run-time", duration
+    ]
+    # start async process
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    # Wait for process to complete and get results
+    stdout, _ = await process.communicate()
+    # Check if test completed successfully
+    status = "success" if process.returncode == 0 else "fail"
+    return {"status": status, "stdout": stdout.decode('utf-8')}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

@@ -207,7 +207,7 @@
         .no-messages {
             text-align: center;
             color: white;
-            font-size: 2.2rem;
+            font-size: 1.5rem;
             margin-top: 50px;
         }
         
@@ -251,7 +251,7 @@
             <div class="image-placeholder" id="image-placeholder">
                 <div style="text-align: center; color: #ffffff; font-size: 1.5rem;">
                     <div style="margin-bottom: 10px;">🖼️</div>
-                    <div style="font-size: 1rem; margin-top: 10px;">尚未有任何圖片。成為第一個分享圖片的人！</div>
+                    <div style="font-size: 1.5rem; margin-top: 10px;">尚未有任何圖片。成為第一個分享圖片的人！</div>
                 </div>
             </div>
             <div class="image-display" id="image-display">
@@ -428,7 +428,13 @@
             `;
             messagesContainer.appendChild(messageEl);
             if (isNew) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                // Wait for slideIn animation to complete (500ms) before smooth scrolling
+                setTimeout(() => {
+                    messagesContainer.scrollTo({
+                        top: messagesContainer.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }, 500);
             }
         }
         
