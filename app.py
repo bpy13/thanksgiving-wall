@@ -195,13 +195,16 @@ async def reset_database():
     return {"status": "success", "message": "Database reset successfully"}
 
 @app.post("/admin/stress-test")
-async def run_stress_test(users: int = 10, duration: str = "30s"):
+async def run_stress_test(
+    request: Request, users: int = 10, duration: str = "30s"):
     """Trigger Locust stress test via API endpoint (non-blocking)"""
+    # Get the actual host URL dynamically (works for localhost and Heroku)
+    host_url = f"{request.url.scheme}://{request.url.netloc}"
     # Run Locust stress test asynchronously (non-blocking)
     cmd = [
         "locust",
         "-f", "locustfile.py",
-        "--host", "http://localhost:8000",
+        "--host", host_url,
         "--headless",
         "--users", str(users),
         "--run-time", duration
