@@ -14,4 +14,4 @@ release:
     - python3 release_tasks.py
 
 run:
-  web: uvicorn app:app --host 0.0.0.0 --port $PORT
+  web: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1
