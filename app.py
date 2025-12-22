@@ -1,14 +1,21 @@
 import os
 import io
 import json
+import yaml
 import base64
 import asyncio
 from PIL import Image
 from typing import List, Dict, Any
 from psycopg import AsyncConnection
 from datetime import datetime, timezone, timedelta
-from fastapi import FastAPI, UploadFile, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Form, UploadFile, HTTPException
 from fastapi.templating import Jinja2Templates
+
+# Admin token authentication
+with open('heroku.yml', 'r') as f:
+    heroku_config = yaml.safe_load(f)
+    ADMIN_TOKEN = heroku_config['setup']['config']['ADMIN_TOKEN']
 
 # Database connection - supports both Heroku DATABASE_URL and individual env vars
 database_url = os.getenv("DATABASE_URL")
@@ -47,6 +54,12 @@ class ConnectionManager:
                     self.disconnect(connection)
 
 manager = ConnectionManager()
+
+def check_secret(request: Request):
+    """Check if request has valid secret parameter"""
+    secret = request.query_params.get("secret")
+    if not secret or secret != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid secret")
 
 @app.get("/")
 async def upload_page(request: Request):
@@ -171,8 +184,9 @@ async def get_images(limit: int = 10):
             } for img in images]
 
 @app.get("/admin/health-check")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint for monitoring and testing"""
+    check_secret(request)
     try:
         # Test database by calling actual endpoints
         await get_messages(limit=1)
@@ -185,8 +199,9 @@ async def health_check():
     return {"status": health, "error": error_msg}
 
 @app.post("/admin/reset-database")
-async def reset_database():
+async def reset_database(request: Request):
     """Reset database for testing purposes - USE WITH CAUTION"""
+    check_secret(request)
     async with await AsyncConnection.connect(database_url) as con:
         async with con.cursor() as cur:
             await cur.execute(
@@ -198,6 +213,7 @@ async def reset_database():
 async def run_stress_test(
     request: Request, users: int = 20, duration: str = "20s"):
     """Trigger Locust stress test via API endpoint (non-blocking)"""
+    check_secret(request)
     # Get the actual host URL dynamically (works for localhost and Heroku)
     host_url = f"{request.url.scheme}://{request.url.netloc}"
     # Run Locust stress test asynchronously (non-blocking)

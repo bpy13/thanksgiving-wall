@@ -6,3 +6,4 @@ pillow
 psycopg[binary]
 python-multipart
 uvicorn[standard]
+pyyaml

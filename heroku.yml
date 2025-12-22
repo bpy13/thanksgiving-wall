@@ -4,6 +4,7 @@ setup:
       as: DATABASE
   config:
     TZ: Asia/Hong_Kong
+    ADMIN_TOKEN: 20anniversary
 
 build:
   docker:
