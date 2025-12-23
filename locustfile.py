@@ -35,7 +35,7 @@ SAMPLE_GROUPS = ["青年組", "Adult Group", "Family", "小組A", "Group B", "�
 
 class UploaderUser(HttpUser):
     """Simulates users actively uploading messages and images"""
-    wait_time = between(5, 15)  # Wait 5-15 seconds between requests
+    #wait_time = between(5, 15)  # Wait 5-15 seconds between requests
     def on_start(self):
         """Always visit root page when user starts"""
         self.client.get("/")
