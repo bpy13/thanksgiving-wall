@@ -11,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi import Form, UploadFile, HTTPException
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse
 
 # Admin token authentication
 with open('heroku.yml', 'r') as f:
@@ -138,6 +139,11 @@ async def upload(
 async def display_page(request: Request):
     """Display page with real-time comment feed"""
     return templates.TemplateResponse("display.html", {"request": request})
+
+@app.get("/QR.jpeg")
+async def get_qr_code():
+    """Serve QR code image"""
+    return FileResponse("QR.jpeg", media_type="image/jpeg")
 
 @app.get("/messages")
 async def get_messages(limit: int = 20):
