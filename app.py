@@ -168,7 +168,7 @@ async def get_messages(limit: int = 2000):
             } for msg in messages]
 
 @app.get("/images")
-async def get_images(limit: int = 10):
+async def get_images(limit: int = 10, offset: int = 0):
     """Get recent images for display"""
     async with await AsyncConnection.connect(database_url) as con:
         async with con.cursor() as cur:
@@ -177,8 +177,8 @@ async def get_images(limit: int = 10):
                 message, image, user_name, group_name, event, upload_time
                 FROM images
                 ORDER BY RANDOM()
-                LIMIT %s
-            """, (limit,))
+                LIMIT %s OFFSET %s
+            """, (limit, offset))
             images = await cur.fetchall()
             return [{
                 "message": img[0],

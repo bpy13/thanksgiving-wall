@@ -332,18 +332,10 @@
                         startMessageScroll();
                     }, 1000);
                 }
-                // Load images
-                await refreshImages();
-                if (realtimeImages.length + initialImages.length === 0) {
-                    imageDisplay.classList.remove('active');
-                    imagePlaceholder.style.display = 'flex';
-                } else {
-                    await showImage();
-                    if (initialImages.length + realtimeImages.length > 0) {
-                        databaseFilled = true;
-                        startImageRotation();
-                    }
-                }
+                // Load first image only, then load rest in background
+                await loadFirstImage();
+                // Load remaining images in background
+                loadRemainingImages();
             } catch (error) {
                 console.error('Failed to load initial data:', error);
                 messagesContainer.innerHTML = '<div class="no-messages" style="padding: 20px; text-align: center; color: #ffffff;">載入訊息失敗</div>';
@@ -359,6 +351,46 @@
             } else if (initialImages.length > 0) {
                 const image = initialImages.shift(); // Get and remove first image
                 displayImage(image);
+            }
+        }
+        
+        // Load first image immediately
+        async function loadFirstImage() {
+            try {
+                const response = await fetch('/images?limit=1');
+                const imageData = await response.json();
+                if (imageData.length > 0) {
+                    const firstImage = {
+                        ...imageData[0],
+                        blob: `data:image/jpeg;base64,${imageData[0].image}`
+                    };
+                    displayImage(firstImage);
+                    startImageRotation();
+                } else {
+                    imageDisplay.classList.remove('active');
+                    imagePlaceholder.style.display = 'flex';
+                }
+            } catch (error) {
+                console.error('Failed to load first image:', error);
+                imageDisplay.classList.remove('active');
+                imagePlaceholder.style.display = 'flex';
+            }
+        }
+        
+        // Load remaining images in background
+        async function loadRemainingImages() {
+            try {
+                const response = await fetch('/images?offset=1');
+                const imageData = await response.json();
+                initialImages = imageData.map(img => ({
+                    ...img,
+                    blob: `data:image/jpeg;base64,${img.image}`
+                }));
+                if (initialImages.length > 0) {
+                    databaseFilled = true;
+                }
+            } catch (error) {
+                console.error('Failed to load remaining images:', error);
             }
         }
         
