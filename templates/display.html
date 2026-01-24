@@ -307,6 +307,10 @@
         let realtimeImages = []; // Images from WebSocket
         let imageRotationInterval = null;
         let databaseFilled = false;
+        let messageScrollInterval = null;
+        let scrollSpeed = 2; // pixels per frame
+        let pauseAtTop = 2000; // pause at top for 2 seconds
+        let pauseAtBottom = 2000; // pause at bottom for 2 seconds
         
         // Load initial data
         async function loadInitialData() {
@@ -322,7 +326,11 @@
                     messages.reverse().forEach(message => {
                         addMessage(message, false);
                     });
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    messagesContainer.scrollTop = 0;
+                    // Start auto-scrolling after messages are loaded
+                    setTimeout(() => {
+                        startMessageScroll();
+                    }, 1000);
                 }
                 // Load images
                 await refreshImages();
@@ -414,6 +422,58 @@
             }, 10000); // Change image every 10 seconds
         }
         
+        // Start automatic message scrolling
+        function startMessageScroll() {
+            if (messageScrollInterval) {
+                clearInterval(messageScrollInterval);
+            }
+            
+            const container = messagesContainer;
+            
+            // Check if there's content to scroll
+            if (container.scrollHeight <= container.clientHeight) {
+                console.log('Not enough content to scroll');
+                return; // Not enough content to scroll
+            }
+            
+            let isPaused = false;
+            let pauseTimer = null;
+            let hasStarted = false;
+            
+            messageScrollInterval = setInterval(() => {
+                if (isPaused) return;
+                
+                const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 5;
+                const isAtTop = container.scrollTop <= 5;
+                
+                if (isAtBottom) {
+                    // Pause at bottom, then jump to top
+                    isPaused = true;
+                    clearTimeout(pauseTimer);
+                    pauseTimer = setTimeout(() => {
+                        container.scrollTop = 0;
+                        hasStarted = false;
+                        isPaused = true;
+                        clearTimeout(pauseTimer);
+                        pauseTimer = setTimeout(() => {
+                            isPaused = false;
+                        }, pauseAtTop);
+                    }, pauseAtBottom);
+                } else if (isAtTop && !hasStarted) {
+                    // Just started - pause briefly at top before first scroll
+                    hasStarted = true;
+                    isPaused = true;
+                    clearTimeout(pauseTimer);
+                    pauseTimer = setTimeout(() => {
+                        isPaused = false;
+                    }, pauseAtTop);
+                } else {
+                    // Scroll down smoothly
+                    container.scrollTop += scrollSpeed;
+                }
+            }, 30); // ~33fps
+        }
+        
         // Add message to display
         function addMessage(messageData, isNew = true) {
             // Remove "no messages" placeholder if it exists
@@ -446,15 +506,7 @@
                 </div>
             `;
             messagesContainer.appendChild(messageEl);
-            if (isNew) {
-                // Wait for slideIn animation to complete (500ms) before smooth scrolling
-                setTimeout(() => {
-                    messagesContainer.scrollTo({
-                        top: messagesContainer.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                }, 500);
-            }
+            // Don't interrupt auto-scroll for new messages
         }
         
         // Escape HTML to prevent XSS

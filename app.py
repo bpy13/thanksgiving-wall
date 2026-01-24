@@ -5,7 +5,7 @@ import yaml
 import base64
 import asyncio
 from PIL import Image
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from psycopg import AsyncConnection
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -73,7 +73,7 @@ async def upload(
     user_name: str = Form(""),
     group_name: str = Form(""),
     event: str = Form(""),
-    image: UploadFile | None = None
+    image: Optional[UploadFile] = None
 ):
     """Endpoint to upload form data to database and broadcast to display clients"""
     status = "failed"
@@ -146,7 +146,7 @@ async def get_qr_code():
     return FileResponse("QR.jpeg", media_type="image/jpeg")
 
 @app.get("/messages")
-async def get_messages(limit: int = 20):
+async def get_messages(limit: int = 2000):
     """Get recent messages for initial load"""
     async with await AsyncConnection.connect(database_url) as con:
         async with con.cursor() as cur:
