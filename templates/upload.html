@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -216,7 +216,7 @@
                 <label for="image">上傳照片</label>
                 <div class="file-input-wrapper">
                     <input type="file" id="image" name="image" accept="image/*" class="file-input">
-                    <div class="file-input-button">點擊選擇檔案</div>
+                    <div class="file-input-button">📸 點擊選擇檔案</div>
                 </div>
             </div>
 
@@ -242,6 +242,16 @@
         const fileInput = document.getElementById("image");
         const fileButton = document.querySelector(".file-input-button");
         const submitBtn = document.querySelector(".submit-btn");
+        const FILE_BUTTON_LABEL = "📸 點擊選擇檔案";
+        const SUBMIT_LABEL = "分享訊息";
+        const MAX_UPLOAD_MB = {{ max_upload_mb }};
+
+        // Server messages are plain text; escape them before putting them in the page
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
         
         // File button click handler
         fileButton.addEventListener("click", function() {
@@ -253,14 +263,25 @@
             if (this.files.length > 0) {
                 fileButton.textContent = `📸 ${this.files[0].name}`;
             } else {
-                fileButton.textContent = "📸 點擊選擇檔案";
+                fileButton.textContent = FILE_BUTTON_LABEL;
             }
         });
         
         // Form submission
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            
+
+            // Catch oversize photos before spending time uploading them
+            if (fileInput.files.length > 0 && fileInput.files[0].size > MAX_UPLOAD_MB * 1024 * 1024) {
+                response.style.display = "block";
+                response.className = "response error";
+                response.innerHTML = `
+                    <strong>❌ 照片檔案太大</strong><br>
+                    上限為 ${MAX_UPLOAD_MB} MB，請選擇較小的照片再試一次。
+                `;
+                return;
+            }
+
             // Show loading state
             loading.style.display = "block";
             response.style.display = "none";
@@ -289,7 +310,7 @@
                 // Hide loading
                 loading.style.display = "none";
                 submitBtn.disabled = false;
-                submitBtn.textContent = "Share Message";
+                submitBtn.textContent = SUBMIT_LABEL;
                 
                 // Show response
                 response.style.display = "block";
@@ -298,33 +319,33 @@
                     response.className = "response success";
                     response.innerHTML = `
                         <strong>✅ 訊息分享成功！</strong><br>
-                        ${result.warning ? `<em>⚠️ 上傳檔案爲錯誤的圖片格式！</em><br>` : ''}
+                        ${result.warning ? `<em>⚠️ ${escapeHtml(result.warning)}</em><br>` : ''}
                         你的訊息將會顯示在螢幕上。
                     `;
                     
                     // Reset form
                     form.reset();
-                    fileButton.textContent = "📸 Click to choose file";
+                    fileButton.textContent = FILE_BUTTON_LABEL;
                     fileButton.style.background = "#667eea";
                     fileButton.style.borderColor = "#667eea";
                 } else {
                     response.className = "response error";
                     response.innerHTML = `
                         <strong>❌ 訊息分享失敗！</strong><br>
-                        ${result.error || '請再試一次。'}
+                        ${escapeHtml(result.error || '請再試一次。')}
                     `;
                 }
                 
             } catch (error) {
                 loading.style.display = "none";
                 submitBtn.disabled = false;
-                submitBtn.textContent = "分享訊息";
+                submitBtn.textContent = SUBMIT_LABEL;
                 
                 response.style.display = "block";
                 response.className = "response error";
                 response.innerHTML = `
                     <strong>❌ 連線錯誤</strong><br>
-                    ${error.message}
+                    請檢查網絡連線後再試一次。
                 `;
             }
         });

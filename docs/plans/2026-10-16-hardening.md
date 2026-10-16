@@ -33,7 +33,7 @@ display service, so they run offline. The full stack is checked end to end with 
     pyproject.toml (pytest + ruff config, dev extras), requirements.txt (pinned)
   - Done when: `python -c "import fastapi, psycopg_pool, PIL"` works in env `thanksgiving-wall`
 
-- [ ] **Task 2: Shared pool, schema, migration**
+- [x] **Task 2: Shared pool, schema, migration**
   - Files: create db.py, migrations/001_ids_and_image_link.sql; modify init-db/init.sql
   - Done when: init.sql builds the new schema on a fresh postgres:17 container; the migration
     run on an old-schema container with sample rows keeps every row, links each image to its
@@ -44,7 +44,7 @@ display service, so they run offline. The full stack is checked end to end with 
     timestamps are equal). Images with no match get a recreated message row. Timezone via
     `ALTER DATABASE <current db> SET timezone = 'Asia/Hong_Kong'`.
 
-- [ ] **Task 3: Upload service fixes (bugs 1, 2, 4, 6, 8; token sending)**
+- [x] **Task 3: Upload service fixes (bugs 1, 2, 4, 6, 8; token sending)**
   - Files: modify upload.py; test tests/test_upload.py
   - Done when: `pytest tests/test_upload.py` passes, covering: message only; with valid image
     (stored as JPEG ≤1920 px, EXIF rotation applied); invalid image (saved, has_image false,
@@ -54,7 +54,7 @@ display service, so they run offline. The full stack is checked end to end with 
     runs in a thread so it doesn't block other requests. Upload time in the broadcast comes
     from the database row.
 
-- [ ] **Task 4: Display service fixes (bugs 3, 5; limit clamp; join query)**
+- [x] **Task 4: Display service fixes (bugs 3, 5; limit clamp; join query)**
   - Files: modify display.py; test tests/test_display.py
   - Done when: `pytest tests/test_display.py` passes, covering: broadcast skips nobody after a
     dead connection and removes it; `/notify` without/with wrong token → 401; right token
@@ -62,7 +62,7 @@ display service, so they run offline. The full stack is checked end to end with 
     `/images` reads via the join and returns the same keys as before
   - Notes: header `X-Notify-Token`, compared with `secrets.compare_digest`.
 
-- [ ] **Task 5: Upload page labels and display page strings (bug 9)**
+- [x] **Task 5: Upload page labels and display page strings (bug 9)**
   - Files: templates/upload.html, templates/display.html
   - Done when: no English user-facing strings left (`Select-String` for "Share Message",
     "Click to choose", "Just now", "Connection error" finds nothing), and the page is checked
