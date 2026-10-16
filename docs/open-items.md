@@ -13,19 +13,17 @@ As of 2026-10-16. Tick off, or move to `decisions.md` when settled. Each item in
 2. **Run the migration on any existing deployment** (see README, "Upgrading an existing
    database"). Take a `pg_dump` backup first.
 
-3. **Unknown file `docs/plans/2026-10-16-robustness.md`.** An empty file with this name
-   appeared in the repo during the 2026-10-16 run, created by another process (not this
-   run). It was left on disk, untracked and uncommitted. Delete it or keep it, your call.
-
 ## Pending work
 
 ## Later
 4. **iPhone HEIC photos.** Pillow can't read HEIC without the `pillow-heif` add-on. Most
    phone browsers convert to JPEG when uploading through a web form, so this is usually
    fine; if members report "not a valid image" from iPhones, add `pillow-heif`.
-5. **Visual check in a browser.** The 2026-10-16 run checked both pages by fetching their
-   HTML and driving the API and WebSocket from a script, not by looking at them in a browser.
-   Worth a quick look on a phone and the projector before the next meeting.
+5. **Check on a real phone and the projector.** Headless Chrome (2026-10-16) at phone size
+   (390×844) and projector size (1920×1080): the form posted a message with a photo, labels
+   stayed Chinese after reset, and the wall showed the photo, message, group, 圖片 tag and
+   Hong Kong time live. Still worth a look on an actual phone and the church projector. The
+   only console error was a missing favicon (harmless 404).
 6. **Old photos stay full size.** The migration keeps photos uploaded before 2026-10-16 as
    they were (full size, possibly PNG although the page labels them JPEG). With many large
    old photos, `/images` responses can be big. Option: a one-off script to re-encode them.
