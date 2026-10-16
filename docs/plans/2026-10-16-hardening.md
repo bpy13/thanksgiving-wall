@@ -77,15 +77,18 @@ display service, so they run offline. The full stack is checked end to end with 
   - Notes: postgres healthcheck; services wait for it; `./migrations` mounted read-only into
     the postgres container so the migration can be run with `docker compose exec`.
 
-- [ ] **Task 7: README**
+- [x] **Task 7: README**
   - Files: README.md
   - Done when: ports 5000/5001, env names match `.env.example`, NOTIFY_TOKEN, migration,
     tests documented; no "thread pool" or other unbacked claims left unchecked
 
-- [ ] **Task 8: End-to-end check with docker compose**
+- [x] **Task 8: End-to-end check with docker compose**
   - Done when: `docker compose up --build`; POST a message and a photo; `/messages` and
     `/images` return them; a WebSocket client on `/ws` receives both broadcasts; `/notify`
     without token → 401; then `docker compose down` (no `-v`)
+  - Found during the check: after a Postgres restart the first request failed on a stale
+    pooled connection. Fixed by checking connections on checkout (`db.py`); rechecked.
+    Also ran the README's backup, migration and password-change commands for real.
 
 - [ ] **Task 9: Pre-release review, fixes, ship**
   - Done when: reviewer findings handled (fixed or recorded in open-items), tests and ruff

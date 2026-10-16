@@ -12,7 +12,7 @@
 -- so a message and its image have the same upload_time and message text.
 --
 -- Run (from the repo folder, with the stack up; take a backup first, see README):
---   docker compose exec postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /migrations/001_ids_and_image_link.sql'
+--   docker compose exec postgres sh -c 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /migrations/001_ids_and_image_link.sql'
 
 DO $$
 BEGIN

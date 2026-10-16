@@ -30,6 +30,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         kwargs=connection_kwargs(),
         min_size=1,
         max_size=int(os.getenv("DB_POOL_MAX", "5")),
+        # Test each connection before handing it out, so a Postgres restart doesn't make the
+        # next request fail on a connection the server has already closed.
+        check=AsyncConnectionPool.check_connection,
         open=False,
     )
     await pool.open(wait=False)
