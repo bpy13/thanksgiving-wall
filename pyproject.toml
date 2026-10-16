@@ -28,6 +28,8 @@ py-modules = ["db", "upload", "display"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Starlette's TestClient warns that it will move to httpx2; harmless for these tests.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
 
 [tool.ruff]
 line-length = 100

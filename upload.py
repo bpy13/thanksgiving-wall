@@ -1,91 +1,171 @@
-import os
-import io
-import httpx
+"""Upload service: the form members use to post a message (and optional photo).
+
+Saves the message to Postgres, then asks the display service to show it live.
+"""
+
 import base64
-from PIL import Image
-from psycopg import AsyncConnection
-from datetime import datetime, timezone, timedelta
-from fastapi import FastAPI, UploadFile, Form, Request
+import io
+import logging
+import os
+import uuid
+
+import httpx
+from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
+from PIL import Image, ImageOps, UnidentifiedImageError
+from starlette.concurrency import run_in_threadpool
 
-db_params = {
-    "host": os.getenv("POSTGRES_HOST"),
-    "port": os.getenv("POSTGRES_PORT"),
-    "dbname": os.getenv("POSTGRES_DB"),
-    "user": os.getenv("POSTGRES_USER"),
-    "password": os.getenv("POSTGRES_PASSWORD")
-}
+import db
 
-app = FastAPI()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("upload")
+
+# Settings (see .env.example)
+DISPLAY_SERVICE_URL = os.getenv("DISPLAY_SERVICE_URL", "http://localhost:5001")
+NOTIFY_TOKEN = os.getenv("NOTIFY_TOKEN", "")
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "15"))
+MAX_IMAGE_SIDE = 1920  # longest side after resizing, in pixels
+JPEG_QUALITY = 85
+NOTIFY_TIMEOUT_SECONDS = 5.0
+
+# Messages shown to members (Traditional Chinese)
+MSG_EMPTY = "請輸入感恩訊息。"
+MSG_TOO_LARGE = "照片檔案太大（上限 {mb} MB），請選擇較小的照片再試一次。"
+MSG_NOT_IMAGE = "上傳的檔案不是有效的圖片，訊息已分享，但沒有附上照片。"
+MSG_NOT_SHOWN = "訊息已儲存，但未能即時顯示在螢幕上；螢幕重新載入後便會出現。"
+MSG_SERVER_ERROR = "系統暫時出現問題，請稍後再試。（參考編號：{ref}）"
+
+app = FastAPI(lifespan=db.lifespan)
 templates = Jinja2Templates(directory="templates")
-display_service_url = os.getenv("DISPLAY_SERVICE_URL", "http://localhost:8001")
+
+
+class InvalidImage(Exception):
+    """The uploaded file could not be read as an image."""
+
+
+def prepare_image(raw: bytes) -> bytes:
+    """Validate a photo and turn it into a display-sized JPEG.
+
+    Applies the EXIF orientation (phones store photos sideways and record the rotation),
+    shrinks it to fit within MAX_IMAGE_SIDE, and re-encodes it as JPEG, which is what the
+    display page expects. Raises InvalidImage if the file isn't a readable image.
+    """
+    try:
+        with Image.open(io.BytesIO(raw)) as probe:
+            probe.verify()  # cheap structural check; the image must be reopened afterwards
+        with Image.open(io.BytesIO(raw)) as img:
+            img = ImageOps.exif_transpose(img)  # also fully decodes the image
+            img.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                # JPEG has no transparency: put the photo on a white background
+                rgba = img.convert("RGBA")
+                img = Image.new("RGB", rgba.size, "white")
+                img.paste(rgba, mask=rgba.getchannel("A"))
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+            out = io.BytesIO()
+            img.save(out, "JPEG", quality=JPEG_QUALITY, optimize=True)
+            return out.getvalue()
+    except (
+        UnidentifiedImageError,
+        OSError,
+        SyntaxError,
+        ValueError,
+        Image.DecompressionBombError,
+    ) as e:
+        raise InvalidImage(str(e)) from e
+
+
+def result(
+    status: str, error: str | None = None, warning: str | None = None, code: int = 200
+) -> JSONResponse:
+    """The JSON shape the upload page reads: {status, error, warning}."""
+    return JSONResponse({"status": status, "error": error, "warning": warning}, status_code=code)
+
+
+async def notify_display(data: dict) -> None:
+    """Ask the display service to push the new message to every open display page."""
+    async with httpx.AsyncClient(timeout=NOTIFY_TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            f"{DISPLAY_SERVICE_URL}/notify", json=data, headers={"X-Notify-Token": NOTIFY_TOKEN}
+        )
+        response.raise_for_status()
+
 
 @app.get("/")
 async def index(request: Request):
     """Serve the upload page from templates/upload.html"""
-    return templates.TemplateResponse("upload.html", {"request": request})
+    return templates.TemplateResponse(request, "upload.html", {"max_upload_mb": MAX_UPLOAD_MB})
+
 
 @app.post("/upload")
 async def upload(
-    message: str = Form(...), # required
+    request: Request,
+    message: str = Form(...),  # required
     user_name: str = Form(""),
     group_name: str = Form(""),
     event: str = Form(""),
-    image: UploadFile | None = None
+    image: UploadFile | None = None,
 ):
-    """Endpoint to upload form data to database and notify display service"""
-    status = "failed"
-    warning_msg = None
-    # validate the uploaded image (if any)
-    img = None
-    if image:
-        img_binary = await image.read()
-        try: # try-except by directly opening the image with Pillow
-            img = Image.open(io.BytesIO(img_binary))
-        except:
-            warning_msg = "Uploaded file is not a valid image"
-    # insert into the database
+    """Save the message (and photo, if valid) and notify the display service."""
+    if not message.strip():
+        return result("failed", error=MSG_EMPTY, code=400)
+
+    warning = None
+    jpeg = None
+    if image is not None:
+        max_bytes = MAX_UPLOAD_MB * 1024 * 1024
+        raw = await image.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            return result("failed", error=MSG_TOO_LARGE.format(mb=MAX_UPLOAD_MB), code=413)
+        if raw:  # an empty file part means "no photo"
+            try:
+                # Decoding and resizing is CPU work; run it off the event loop
+                jpeg = await run_in_threadpool(prepare_image, raw)
+            except InvalidImage as e:
+                logger.info("Rejected invalid image %r: %s", image.filename, e)
+                warning = MSG_NOT_IMAGE
+
+    # Save the message, and the photo linked to it, in one transaction
     try:
-        con = await AsyncConnection.connect(**db_params)
-        async with con.cursor() as cur:
-            # Always insert message
-            await cur.execute("""
-                INSERT INTO messages
-                (message, has_image, user_name, group_name, event)
-                VALUES (%s, %s, %s, %s, %s);
-            """, (message, image is not None, user_name, group_name, event))
-            # Insert image if provided
-            if img:
-                await cur.execute("""
-                    INSERT INTO images
-                    (message, image, user_name, group_name, event)
-                    VALUES (%s, %s, %s, %s, %s);
-                """, (message, img_binary, user_name, group_name, event))
-            await con.commit()
-    except Exception as e:
-        error_msg = f"Database error: {e}"
-        return {"status": status, "error": error_msg, "warning": warning_msg}
-    finally:
-        await con.close()
-    # Broadcast new message to the display service if upload is successful
+        async with request.app.state.pool.connection() as con, con.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO messages (message, has_image, user_name, group_name, event)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id, upload_time
+                """,
+                (message, jpeg is not None, user_name, group_name, event),
+            )
+            message_id, upload_time = await cur.fetchone()
+            if jpeg is not None:
+                await cur.execute(
+                    "INSERT INTO images (message_id, image) VALUES (%s, %s)",
+                    (message_id, jpeg),
+                )
+    except Exception:
+        ref = uuid.uuid4().hex[:8]
+        logger.exception("Database error saving upload (ref %s)", ref)
+        return result("failed", error=MSG_SERVER_ERROR.format(ref=ref), code=500)
+
+    # The message is saved. From here on, problems are warnings, not failures.
+    data = {
+        "message": message,
+        "user_name": user_name or "匿名",
+        "group_name": group_name or "",
+        "event": event or "",
+        "upload_time": upload_time.isoformat(),
+        "has_image": jpeg is not None,
+    }
+    if jpeg is not None:
+        data["image"] = base64.b64encode(jpeg).decode("ascii")
     try:
-        upload_time = datetime.now(timezone(timedelta(hours=8))).isoformat()
-        data = {
-            "message": message,
-            "user_name": user_name or "匿名",
-            "group_name": group_name or "",
-            "event": event or "",
-            "upload_time": upload_time,
-            "has_image": image is not None
-        }
-        # If there's an image, include it in the broadcast
-        if img:
-            data["image"] = base64.b64encode(img_binary).decode('utf-8')
-        # Notify the display service
-        async with httpx.AsyncClient() as client:
-            await client.post(f"{display_service_url}/notify", json=data)
-    except Exception as e:
-        warning_msg = f"Failed to broadcast message: {e}"
-        return {"status": status, "error": error_msg, "warning": warning_msg}
-    status = "success"
-    return {"status": status, "error": None, "warning": warning_msg}
+        await notify_display(data)
+    except httpx.HTTPError as e:
+        logger.warning(
+            "Saved message %s but could not notify the display service: %r", message_id, e
+        )
+        warning = f"{warning} {MSG_NOT_SHOWN}" if warning else MSG_NOT_SHOWN
+
+    return result("success", warning=warning)
