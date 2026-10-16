@@ -107,13 +107,19 @@ before October 2026 has the old tables (no ids; photos stored with copies of the
 details). Upgrade it once with the migration, which keeps every existing message and photo:
 
 ```powershell
-# 1. Back up first
+# 1. Stop the app services (Postgres keeps running), then back up.
+#    The backup holds every message and photo: it is saved outside the repo folder so it
+#    can't end up in git or the Docker image.
+docker compose stop upload-server display-server
 docker compose exec postgres sh -c 'pg_dump -U $POSTGRES_USER $POSTGRES_DB > /tmp/backup.sql'
-docker compose cp postgres:/tmp/backup.sql ./backup.sql
-# 2. Start the new version (rebuilds the app; Postgres keeps its data)
-docker compose up -d --build
+docker compose cp postgres:/tmp/backup.sql ..\thanksgiving-backup.sql
+# 2. Get the new version's files (git pull), create .env (see Configuration), then
+#    start Postgres with the new settings (mounts the migrations folder)
+docker compose up -d postgres
 # 3. Run the migration
 docker compose exec postgres sh -c 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /migrations/001_ids_and_image_link.sql'
+# 4. Only now start the new app version (it needs the new tables)
+docker compose up -d --build
 ```
 It prints `Migration 001 applied.` (or `already applied` if run again; running it twice is
 safe). It also corrects `has_image` on old messages whose attached file wasn't a valid image.
@@ -138,7 +144,7 @@ docker compose up -d --force-recreate upload-server display-server
 ### Backups
 ```powershell
 docker compose exec postgres sh -c 'pg_dump -U $POSTGRES_USER $POSTGRES_DB > /tmp/backup.sql'
-docker compose cp postgres:/tmp/backup.sql ./backup.sql
+docker compose cp postgres:/tmp/backup.sql ..\thanksgiving-backup.sql
 ```
 
 ## Development

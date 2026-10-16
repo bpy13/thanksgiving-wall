@@ -90,6 +90,9 @@ display service, so they run offline. The full stack is checked end to end with 
     pooled connection. Fixed by checking connections on checkout (`db.py`); rechecked.
     Also ran the README's backup, migration and password-change commands for real.
 
-- [ ] **Task 9: Pre-release review, fixes, ship**
+- [x] **Task 9: Pre-release review, fixes, ship**
   - Done when: reviewer findings handled (fixed or recorded in open-items), tests and ruff
     pass, pushed to origin main
+  - Review fixed: README backups saved outside the repo (and ignored), upgrade steps migrate
+    before starting the new code (rechecked on an old-schema database), large JPEGs
+    decoded at reduced scale with a pixel cap. Other findings in open-items 6-8.

@@ -11,3 +11,4 @@ tests
 .ruff_cache
 migrations
 init-db
+*.sql
