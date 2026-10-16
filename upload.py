@@ -27,6 +27,8 @@ NOTIFY_TOKEN = os.getenv("NOTIFY_TOKEN", "")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "15"))
 MAX_IMAGE_SIDE = 1920  # longest side after resizing, in pixels
 JPEG_QUALITY = 85
+# Largest image (after JPEG draft scaling) we fully decode; caps memory use at ~150 MB.
+MAX_DECODE_PIXELS = 50_000_000
 NOTIFY_TIMEOUT_SECONDS = 5.0
 
 # Messages shown to members (Traditional Chinese)
@@ -55,6 +57,11 @@ def prepare_image(raw: bytes) -> bytes:
         with Image.open(io.BytesIO(raw)) as probe:
             probe.verify()  # cheap structural check; the image must be reopened afterwards
         with Image.open(io.BytesIO(raw)) as img:
+            # For JPEGs, decode at a reduced scale close to the target size: much less memory
+            # than decoding a 50-megapixel phone photo in full. No effect on other formats.
+            img.draft("RGB", (MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
+            if img.width * img.height > MAX_DECODE_PIXELS:
+                raise InvalidImage(f"too many pixels to decode: {img.width}x{img.height}")
             img = ImageOps.exif_transpose(img)  # also fully decodes the image
             img.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
             if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):

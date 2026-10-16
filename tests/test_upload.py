@@ -114,6 +114,24 @@ def test_invalid_image_saves_message_without_photo(client, fake_pool, notify_cal
     assert broadcast(notify_calls)["has_image"] is False
 
 
+def test_huge_non_jpeg_is_not_decoded(client, fake_pool, monkeypatch):
+    # A PNG can't be draft-scaled, so one over the pixel cap is refused rather than decoded
+    monkeypatch.setattr(upload, "MAX_DECODE_PIXELS", 1000)
+    png = make_image_bytes("PNG", size=(100, 100))
+    body = client.post("/upload", data=FORM, files={"image": ("p.png", png, "image/png")}).json()
+    assert body["warning"] == upload.MSG_NOT_IMAGE
+    assert inserts(fake_pool, "images") == []
+
+
+def test_large_jpeg_is_draft_scaled_and_accepted(client, fake_pool, monkeypatch):
+    # 8000x6000 = 48 MP, over the cap; draft scaling decodes it at half size (12 MP), under it
+    monkeypatch.setattr(upload, "MAX_DECODE_PIXELS", 13_000_000)
+    jpg = make_image_bytes("JPEG", size=(8000, 6000))
+    client.post("/upload", data=FORM, files={"image": ("p.jpg", jpg, "image/jpeg")})
+    ((_, stored),) = inserts(fake_pool, "images")
+    assert max(Image.open(io.BytesIO(stored)).size) <= 1920
+
+
 def test_truncated_image_is_invalid(client, fake_pool):
     jpg = make_image_bytes("JPEG", size=(400, 400))
     client.post("/upload", data=FORM, files={"image": ("p.jpg", jpg[:200], "image/jpeg")})
