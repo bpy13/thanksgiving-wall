@@ -27,7 +27,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     the pool keeps retrying in the background and requests wait for a free connection.
     """
     pool = AsyncConnectionPool(
-        kwargs=connection_kwargs(), min_size=1, max_size=int(os.getenv("DB_POOL_MAX", "5")),
+        kwargs=connection_kwargs(),
+        min_size=1,
+        max_size=int(os.getenv("DB_POOL_MAX", "5")),
         open=False,
     )
     await pool.open(wait=False)

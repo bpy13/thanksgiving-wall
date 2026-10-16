@@ -70,7 +70,7 @@ display service, so they run offline. The full stack is checked end to end with 
   - Notes: show the server's warning text instead of always saying "wrong image format";
     check file size in the browser before uploading.
 
-- [ ] **Task 6: Config, compose, Docker (credentials, bug 7)**
+- [x] **Task 6: Config, compose, Docker (credentials, bug 7)**
   - Files: docker-compose.yml, .env.example, .gitignore, .dockerignore
   - Done when: `docker compose config` renders with values from `.env`; no 5432 port mapping;
     `.env` ignored by git

@@ -1,3 +1,4 @@
+# Settings come from .env (copy .env.example to .env and fill it in).
 volumes:
   pg_data:
 
@@ -5,41 +6,50 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 20anniversary
-      POSTGRES_DB: thanksgiving
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    # No ports: Postgres is reachable only by the two services on the compose network.
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./init-db:/docker-entrypoint-initdb.d
-  
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+      - ./migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   display-server:
     build: .
     command: uvicorn display:app --host 0.0.0.0 --port 5001
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 20anniversary
-      POSTGRES_DB: thanksgiving
+    environment: &app-env
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      NOTIFY_TOKEN: ${NOTIFY_TOKEN:?set NOTIFY_TOKEN in .env}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-15}
     ports:
       - "5001:5001"
     depends_on:
-      - postgres
-  
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   upload-server:
     build: .
     command: uvicorn upload:app --host 0.0.0.0 --port 5000
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 20anniversary
-      POSTGRES_DB: thanksgiving
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
+      <<: *app-env
       DISPLAY_SERVICE_URL: ${DISPLAY_SERVICE_URL:-http://display-server:5001}
     ports:
       - "5000:5000"
     depends_on:
-      - postgres
-      - display-server
+      postgres:
+        condition: service_healthy
+      display-server:
+        condition: service_started
+    restart: unless-stopped
