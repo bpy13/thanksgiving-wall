@@ -4,7 +4,6 @@ Serves the display page, recent messages and photos, and pushes new uploads to e
 display page over a WebSocket.
 """
 
-import base64
 import json
 import logging
 import os
@@ -12,6 +11,7 @@ import secrets
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 import db
@@ -22,7 +22,7 @@ logger = logging.getLogger("display")
 # Settings (see .env.example)
 NOTIFY_TOKEN = os.getenv("NOTIFY_TOKEN", "")
 MAX_MESSAGES_LIMIT = 100
-MAX_IMAGES_LIMIT = 30  # photos are a few hundred KB each, so keep this modest
+MAX_IMAGES_LIMIT = 30
 
 app = FastAPI(lifespan=db.lifespan)
 templates = Jinja2Templates(directory="templates")
@@ -104,11 +104,15 @@ async def get_messages(request: Request, limit: int = 20):
 
 @app.get("/images")
 async def get_images(request: Request, limit: int = 10):
-    """Get a random selection of photos, with their message details, for the slideshow"""
+    """Get a random selection of photos for the slideshow: message details and a photo URL.
+
+    The photos themselves are fetched one by one from /images/{id}. Sending them all in this
+    response made the wall wait for every photo (tens of MB at full size) before showing one.
+    """
     async with request.app.state.pool.connection() as con, con.cursor() as cur:
         await cur.execute(
             """
-            SELECT m.message, i.image, m.user_name, m.group_name, m.event, m.upload_time
+            SELECT i.id, m.message, m.user_name, m.group_name, m.event, m.upload_time
             FROM images i
             JOIN messages m ON m.id = i.message_id
             ORDER BY RANDOM()
@@ -119,8 +123,8 @@ async def get_images(request: Request, limit: int = 10):
         rows = await cur.fetchall()
     return [
         {
-            "message": row[0],
-            "image": base64.b64encode(row[1]).decode("ascii"),
+            "url": f"/images/{row[0]}",
+            "message": row[1],
             "user_name": row[2] or "匿名",
             "group_name": row[3] or "",
             "event": row[4] or "",
@@ -128,6 +132,37 @@ async def get_images(request: Request, limit: int = 10):
         }
         for row in rows
     ]
+
+
+IMAGE_SIGNATURES = [
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"GIF8", "image/gif"),
+    (b"RIFF", "image/webp"),
+]
+
+
+def image_media_type(data: bytes) -> str:
+    """New uploads are JPEG; photos from before the 2026-10 changes may be PNG or others."""
+    for magic, media_type in IMAGE_SIGNATURES:
+        if data.startswith(magic):
+            return media_type
+    return "image/jpeg"
+
+
+@app.get("/images/{image_id}")
+async def get_image(request: Request, image_id: int):
+    """One photo's bytes. A photo never changes, so the browser may keep it for a year."""
+    async with request.app.state.pool.connection() as con, con.cursor() as cur:
+        await cur.execute("SELECT image FROM images WHERE id = %s", (image_id,))
+        rows = await cur.fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="no such image")
+    data = bytes(rows[0][0])
+    return Response(
+        content=data,
+        media_type=image_media_type(data),
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.websocket("/ws")

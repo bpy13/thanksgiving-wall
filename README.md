@@ -97,8 +97,12 @@ uploads aren't held up.
 
 ### Display limits
 - `/messages?limit=` returns the latest messages (default 20, at most 100)
-- `/images?limit=` returns a random set of photos (default 10, at most 30)
-- Photo rotation every 10 seconds (set in `templates/display.html`)
+- `/images?limit=` returns a random set of photos (default 10, at most 30): the message
+  details and a URL for each photo, not the photo itself
+- `/images/{id}` returns one photo; the browser keeps it, so it is downloaded only once
+- Photo rotation every 10 seconds (set in `templates/display.html`). The wall downloads each
+  photo just before its turn, while the previous one is on screen, so the first photo appears
+  as soon as it has arrived instead of after the whole set.
 
 ## Upgrading an existing database
 

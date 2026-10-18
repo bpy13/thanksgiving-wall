@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 from datetime import UTC, datetime
 
@@ -94,14 +93,14 @@ def test_messages_shape_and_limit_clamp(client, fake_pool):
     assert fake_pool.executed[-1][1] == (20,)
 
 
-def test_images_joins_messages_and_keeps_shape(client, fake_pool):
+def test_images_lists_photo_urls_not_photo_bytes(client, fake_pool):
     t = datetime(2026, 10, 16, 2, 30, tzinfo=UTC)
-    fake_pool.rows = [("感謝", b"\xff\xd8jpeg", "Amy", "D21", "感恩會", t)]
+    fake_pool.rows = [(7, "感謝", "Amy", "D21", "感恩會", t)]
     body = client.get("/images?limit=999").json()
     assert body == [
         {
+            "url": "/images/7",
             "message": "感謝",
-            "image": base64.b64encode(b"\xff\xd8jpeg").decode(),
             "user_name": "Amy",
             "group_name": "D21",
             "event": "感恩會",
@@ -110,7 +109,31 @@ def test_images_joins_messages_and_keeps_shape(client, fake_pool):
     ]
     sql, params = fake_pool.executed[-1]
     assert "JOIN messages m ON m.id = i.message_id" in sql
+    assert "i.image" not in sql  # the list must stay small: no photo bytes in it
     assert params == (display.MAX_IMAGES_LIMIT,)
+
+
+@pytest.mark.parametrize(
+    "data, media_type",
+    [
+        (b"\xff\xd8\xff\xe0jpeg", "image/jpeg"),
+        (b"\x89PNG\r\n\x1a\nold-png", "image/png"),  # photos stored before resizing existed
+    ],
+)
+def test_single_image_bytes_type_and_cache_header(client, fake_pool, data, media_type):
+    fake_pool.rows = [(data,)]
+    r = client.get("/images/7")
+    assert r.status_code == 200
+    assert r.content == data
+    assert r.headers["content-type"] == media_type
+    assert "immutable" in r.headers["cache-control"]
+    assert fake_pool.executed[-1][1] == (7,)
+
+
+def test_single_image_missing_is_404(client, fake_pool):
+    fake_pool.rows = []
+    assert client.get("/images/999").status_code == 404
+    assert client.get("/images/not-a-number").status_code == 422
 
 
 def test_display_page_has_no_english_status_text(client):

@@ -323,39 +323,71 @@
             }
         }
         
-        // Show first image from active queue and discard it
-        function showImage() {
-            // Check realtime queue first
-            if (realtimeImages.length > 0) {
-                const image = realtimeImages.shift(); // Get and remove first image
-                displayImage(image);
-            } else if (initialImages.length > 0) {
-                const image = initialImages.shift(); // Get and remove first image
-                displayImage(image);
+        // Start downloading a photo (only once per photo). The promise resolves when the photo
+        // is ready to draw, so swapping it onto the screen is instant.
+        function preload(image) {
+            if (!image.ready) {
+                const img = new Image();
+                img.src = image.src;
+                image.ready = img.decode();
+            }
+            return image.ready;
+        }
+
+        // Next photo in line: new uploads first, then the random selection from the database
+        function nextImage() {
+            return realtimeImages[0] || initialImages[0];
+        }
+
+        let showing = false; // true while a photo is loading for display; skip overlapping calls
+
+        // Take the next photo off the queue and show it once it has downloaded. The current
+        // photo stays on screen meanwhile; a photo that fails to load is skipped.
+        async function showImage() {
+            if (showing) return;
+            showing = true;
+            try {
+                while (realtimeImages.length + initialImages.length > 0) {
+                    const image = realtimeImages.length > 0 ? realtimeImages.shift() : initialImages.shift();
+                    try {
+                        await preload(image);
+                    } catch (error) {
+                        console.error('Failed to load image:', image.src, error);
+                        continue;
+                    }
+                    displayImage(image);
+                    break;
+                }
+                // Download the following photo while this one is on screen
+                const upcoming = nextImage();
+                if (upcoming) preload(upcoming).catch(() => {}); // failures are handled when it's shown
+            } finally {
+                showing = false;
             }
         }
-        
-        // Refresh images from database
+
+        // Fetch a new random selection of photos. Only the details and photo URLs come in this
+        // request; each photo is downloaded separately, just before it's needed, and the browser
+        // keeps it, so photos that come round again aren't downloaded twice.
         async function refreshImages() {
             try {
                 const response = await fetch('/images');
                 const imageData = await response.json();
-                initialImages = imageData.map(img => ({
-                    ...img,
-                    blob: `data:image/jpeg;base64,${img.image}`
-                }));
+                initialImages = imageData.map(img => ({ ...img, src: img.url }));
                 if (initialImages.length + realtimeImages.length > 1) {
                     databaseFilled = true;
                 }
+                const upcoming = nextImage();
+                if (upcoming) preload(upcoming).catch(() => {});
             } catch (error) {
                 console.error('Failed to refresh images:', error);
             }
         }
-        
+
         // Helper function to display an image
         function displayImage(image) {
             // Set image
-            currentImage.src = image.blob;
+            currentImage.src = image.src;
             currentImage.alt = `${image.user_name}：${image.message}`;
             // Set message content
             imageMessageText.textContent = image.message;
@@ -462,7 +494,7 @@
                         if (data.data.image) {
                             const newImage = {
                                 ...data.data,
-                                blob: `data:image/jpeg;base64,${data.data.image}`
+                                src: `data:image/jpeg;base64,${data.data.image}`
                             };
                             realtimeImages.push(newImage);
                             // If currently showing placeholder, start showing this image

@@ -31,6 +31,13 @@ What was decided, why, and when. Change these only with a reason, and note the c
 - If saving worked but the live notify failed, the upload counts as a success with a warning
   (the message appears when the display page next reloads).
 - `limit` on `/messages` is clamped to 1–100 and on `/images` to 1–30 (silently, no error).
+- Photos load one at a time (2026-10-18). At the last Thanksgiving event the wall took about a minute to
+  show its first photo: `/images` sent 10 full-size photos (~60 MB) in one response and the
+  page waited for all of it. Measured on a test copy at 10 Mbit/s: 48.9 s before, 4.0 s after
+  with the same full-size photos. `/images` now lists URLs; `/images/{id}` serves each photo
+  with a one-year `immutable` cache header (a photo never changes). The page downloads the
+  next photo while the current one is shown, since 10 s per photo is ample time. Live uploads
+  still arrive inside the WebSocket message (already resized, ~0.4 MB).
 - Errors shown to users are generic Chinese text plus a reference ID; details go to the log.
 
 ## UI

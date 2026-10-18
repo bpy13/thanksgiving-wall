@@ -1,6 +1,6 @@
 # Open items
 
-As of 2026-10-16. Tick off, or move to `decisions.md` when settled. Each item in one place only.
+As of 2026-10-18. Tick off, or move to `decisions.md` when settled. Each item in one place only.
 
 ## Blockers
 
@@ -25,8 +25,9 @@ As of 2026-10-16. Tick off, or move to `decisions.md` when settled. Each item in
    Hong Kong time live. Still worth a look on an actual phone and the church projector. The
    only console error was a missing favicon (harmless 404).
 6. **Old photos stay full size.** The migration keeps photos uploaded before 2026-10-16 as
-   they were (full size, possibly PNG although the page labels them JPEG). With many large
-   old photos, `/images` responses can be big. Option: a one-off script to re-encode them.
+   they were (full size, possibly PNG; `/images/{id}` sends the right type). Since photos
+   now load one at a time (2026-10-18), a full-size photo only delays its own turn: about
+   4 s each at 10 Mbit/s, inside the 10 s rotation. Option: a one-off script to re-encode them.
 7. **Upload size is checked after the file arrives.** The 15 MB cap stops the photo being
    stored, but the server still receives the whole request first. Low risk on a church
    network; a reverse proxy with a request-size limit would close it.
